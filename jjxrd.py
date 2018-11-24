@@ -10,20 +10,29 @@ import numpy as np
 from atomic_form_factors import ff
 import matplotlib.pyplot as plt
 import itertools
+from evaluate import getEMD,overlap
 
-def f(x,h,mu):
-    sig=0.1
-    f=0
-    for i in range(len(h)):
-        f+=h[i]/sig/np.sqrt(2*np.pi)*np.e**(-0.5*(x-mu[i])**2/sig**2)
-    return f
+angle_=np.load('N.npz')['angle']
+I_=np.load('N.npz')['I']
 
+def compress(P,n=20,l=None):
+    """
+    (x,y)=(np.arange(n),np.sum(np.concatenate((P[1],np.zeros(n-len(P[1])%n))).reshape(-1,len(P[1])//n+1),1))
+    plt.figure()
+    plt.scatter(x,y)
+    return (x,y)
+    """
+    if l is not None:
+        P=(P[0][l],P[1][l])
+    return (np.arange(n),np.sum(np.concatenate((P[1],np.zeros(n-len(P[1])%n))).reshape(-1,len(P[1])//n+1),1))
+    
 class XRD():
     def __init__(self,hkl,theta,Kh,atoms):
         self.hkl=hkl
         self.multi=1
         self.theta=theta
         self.Kh=Kh
+        self.d=2*np.pi/Kh
         self.atoms=atoms
         self.positions=atoms.get_scaled_positions()
 
@@ -45,31 +54,40 @@ class XRD():
         P = 1 + np.cos(2*self.theta)**2
         self.I = self.get_F()*LP*P*self.multi
         return self.I
+        #return self.get_F()
         
 class XrdStructure():
-    def __init__(self,atoms,lamb):
+    def __init__(self,atoms,lamb,name,theta=[0,90]):
         self.atoms=atoms
         self.lattice=self.atoms.get_cell_lengths_and_angles()
         self.reciprocal_lattice=self.atoms.get_reciprocal_cell()*2*np.pi
-        self.dmin=lamb/2
+        self.lamb=lamb
+        [self.thetamin,self.thetamax]=theta
+        self.Khmax=4*np.pi*np.sin(self.thetamax/180*np.pi)/lamb
+        self.Khmin=4*np.pi*np.sin(self.thetamin/180*np.pi)/lamb
         self.peaks=[]
-    
-    def xiajibahua(self):
-        angle=np.arange(0,180,0.01)
-        I=np.array([f(x,self.Is,self.angles) for x in angle])
-        plt.scatter(angle,I,s=3)
-        
-    def initialize(self):
         self.angles=[]
         self.Is=[]
         self.getallhkl()
+        self.name=name
         for peak in self.peaks:
             peak.get_I()
             self.angles.append(peak.theta/np.pi*360)
             self.Is.append(peak.I)
+        self.Is=self.Is/np.sum(self.Is)
+    
+    def xiajibahua(self):
+        plt.figure()
+        angle=np.arange(2*self.thetamin,2*self.thetamax,0.01)
+        I=np.array([self.f(x) for x in angle])
+        plt.plot(angle,I,label=self.name)
+        plt.plot(angle_,I_,label='shiyan')
+        #plt.text(self.thetamin+0.5,np.max(I)-0.5,self.evaluate(),fontsize=15)
+        plt.plot([4],[0],label=self.evaluate('overlap'))
+        plt.legend()
         
     def getallhkl(self):
-        index_range = np.arange(8, -9,-1)
+        index_range = np.arange(16, -17,-1)
         for hkl in itertools.product(index_range, repeat=3):
             theta=self.gettheta(hkl)
             if theta:
@@ -82,19 +100,47 @@ class XrdStructure():
                     self.peaks.append(XRD(hkl,theta,self.getKh(hkl),self.atoms))
             
     def gettheta(self,hkl):
-        if 2*np.pi<self.getKh(hkl)*self.dmin or self.getKh(hkl)==0:
+        if self.getKh(hkl)<self.Khmin or self.getKh(hkl)>self.Khmax:
             return False
         else:
-            return np.arcsin(self.dmin/(2*np.pi/self.getKh(hkl)))
+            return np.arcsin(self.getKh(hkl)*self.lamb/4/np.pi)
 
     def getKh(self,hkl):
         Kh=np.dot(hkl,self.reciprocal_lattice)
         return np.sqrt(np.dot(Kh,Kh))
 
-lamb=1.54
-atoms=ase.io.read('H.vasp')
-a=XrdStructure(atoms,lamb)
-a.initialize()
-for peak in a.peaks:
-    print('hkl=',peak.hkl,'  theta=',peak.theta/np.pi*360,' I=',peak.I,' multi=',peak.multi)
-a.xiajibahua()
+    def f(self,x,sigma=0.05):
+        f=0
+        for h,mu in zip(self.Is,self.angles):
+            f+=h/sigma/np.sqrt(2*np.pi)*np.e**(-0.5*(x-mu)**2/sigma**2)
+        return f
+    
+    def evaluate(self,method='overlap'):
+        P=(angle_,I_)
+        Q=(angle_,np.array([self.f(x) for x in angle_]))
+        if method=='overlap':
+            self.evaluate=2*overlap(compress(P,20),compress(Q,20))+overlap(compress(P,10),compress(Q,10))+overlap(compress(P,1,np.arange(250,310)),compress(Q,1,np.arange(250,310)))
+            #self.evaluate=overlap(P,Q)
+        if method=='EMD':
+            self.evaluate=getEMD(compress(P),compress(Q))
+        return self.evaluate
+        #return np.sum(np.array([y*a.f(x)*0.01465 for x,y in zip(angle_,I_)]))
+        
+
+if __name__ == '__main__':
+    lamb=0.6199
+    
+    import os
+    import os.path
+    rootdir = os.getcwd()                               
+    
+    for parent,dirnames,filenames in os.walk(rootdir):    
+        for filename in filenames:
+            if '.cif' in filename:
+                a=XrdStructure(ase.io.read(filename),lamb,filename,[2,7.5])
+                """
+                for peak in a.peaks:
+                    print('hkl=',peak.hkl,'  theta=',peak.theta/np.pi*360,' I=',peak.I,' multi=',peak.multi,' d=',peak.d)
+                """
+                #a.xiajibahua()
+                print(filename,':',a.evaluate())

@@ -58,3 +58,7 @@ def getEMD(P,Q):
 
 def overlap(P,Q):
     return np.sum(np.array([x*y for x,y in zip(P[1],Q[1])]))
+
+def comparepeak(P,Q):
+    return abs(Q[0][np.argmax(Q[1])]-P[0][np.argmax(P[1])])<0.5
+        

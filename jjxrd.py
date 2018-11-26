@@ -10,10 +10,12 @@ import numpy as np
 from atomic_form_factors import ff
 import matplotlib.pyplot as plt
 import itertools
-from evaluate import getEMD,overlap
+from evaluate import getEMD,overlap,comparepeak
 
 angle_=np.load('N.npz')['angle']
 I_=np.load('N.npz')['I']
+angles_=np.array([8.049320,8.181150,9.045410,11.140140,7.316890,11.374510,11.843260,4.906223,5.770673])
+Is_=np.array([306.584200,290.514510,206.252920,160.128270,131.165200,56.098770,79.021790,42.823206,25.218805])/184.33
 
 def compress(P,n=20,l=None):
     """
@@ -75,15 +77,16 @@ class XrdStructure():
             self.angles.append(peak.theta/np.pi*360)
             self.Is.append(peak.I)
         self.Is=self.Is/np.sum(self.Is)
+        self.evaluate()
     
     def xiajibahua(self):
         plt.figure()
         angle=np.arange(2*self.thetamin,2*self.thetamax,0.01)
-        I=np.array([self.f(x) for x in angle])
+        I=np.array([self.f(x,big=False) for x in angle])
         plt.plot(angle,I,label=self.name)
         plt.plot(angle_,I_,label='shiyan')
         #plt.text(self.thetamin+0.5,np.max(I)-0.5,self.evaluate(),fontsize=15)
-        plt.plot([4],[0],label=self.evaluate('overlap'))
+        plt.plot([4],[0],label=self.evaluate)
         plt.legend()
         
     def getallhkl(self):
@@ -109,20 +112,28 @@ class XrdStructure():
         Kh=np.dot(hkl,self.reciprocal_lattice)
         return np.sqrt(np.dot(Kh,Kh))
 
-    def f(self,x,sigma=0.05):
+    def f(self,x,sigma=0.05,big=True):
         f=0
         for h,mu in zip(self.Is,self.angles):
+            if h==max(self.Is) and big:
+                break
             f+=h/sigma/np.sqrt(2*np.pi)*np.e**(-0.5*(x-mu)**2/sigma**2)
         return f
     
     def evaluate(self,method='overlap'):
-        P=(angle_,I_)
-        Q=(angle_,np.array([self.f(x) for x in angle_]))
-        if method=='overlap':
-            self.evaluate=2*overlap(compress(P,20),compress(Q,20))+overlap(compress(P,10),compress(Q,10))+overlap(compress(P,1,np.arange(250,310)),compress(Q,1,np.arange(250,310)))
-            #self.evaluate=overlap(P,Q)
-        if method=='EMD':
-            self.evaluate=getEMD(compress(P),compress(Q))
+        P=(angles_,Is_)
+        Q=(self.angles,self.Is)
+        if comparepeak(P,Q):
+            P=(angle_,I_)
+            Q=(angle_,np.array([self.f(x) for x in angle_]))
+            if method=='overlap':
+                self.evaluate=2*overlap(compress(P,20),compress(Q,20))+overlap(compress(P,10),compress(Q,10))
+                #self.evaluate=overlap(P,Q)
+            if method=='EMD':
+                self.evaluate=getEMD(compress(P),compress(Q))
+
+        else:
+            self.evaluate=0
         return self.evaluate
         #return np.sum(np.array([y*a.f(x)*0.01465 for x,y in zip(angle_,I_)]))
         
@@ -137,10 +148,10 @@ if __name__ == '__main__':
     for parent,dirnames,filenames in os.walk(rootdir):    
         for filename in filenames:
             if '.cif' in filename:
-                a=XrdStructure(ase.io.read(filename),lamb,filename,[2,7.5])
-                """
-                for peak in a.peaks:
-                    print('hkl=',peak.hkl,'  theta=',peak.theta/np.pi*360,' I=',peak.I,' multi=',peak.multi,' d=',peak.d)
-                """
-                #a.xiajibahua()
-                print(filename,':',a.evaluate())
+                a=XrdStructure(ase.io.read('POS/'+filename),lamb,filename,[2,7.5])
+                
+                #for peak in a.peaks:
+                #    print('hkl=',peak.hkl,'  theta=',peak.theta/np.pi*360,' I=',peak.I,' multi=',peak.multi,' d=',peak.d)
+                if a.evaluate:
+                    a.xiajibahua()
+                #print(filename,':',a.evaluate)

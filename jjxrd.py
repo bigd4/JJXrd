@@ -59,7 +59,7 @@ class XRD():
         #return self.get_F()
         
 class XrdStructure():
-    def __init__(self,atoms,lamb,name,theta=[0,90]):
+    def __init__(self,atoms,lamb,name='QAQ',theta=[0,90]):
         self.atoms=atoms
         self.lattice=self.atoms.get_cell_lengths_and_angles()
         self.reciprocal_lattice=self.atoms.get_reciprocal_cell()*2*np.pi
@@ -140,6 +140,9 @@ class XrdStructure():
         return self.evaluate
         #return np.sum(np.array([y*a.f(x)*0.01465 for x,y in zip(angle_,I_)]))
         
+def compare(atoms,data,lamb,theta):
+    [angles_,Is_]=data
+    return XrdStructure(atoms,lamb,theta=theta).evaluate
 
 if __name__ == '__main__':
     lamb=0.6199
@@ -150,11 +153,11 @@ if __name__ == '__main__':
     
     for parent,dirnames,filenames in os.walk(rootdir):    
         for filename in filenames:
-            if '.cif' in filename:
+            if '123.cif' in filename:
                 a=XrdStructure(ase.io.read('POS/'+filename),lamb,filename,[2,7.5])
                 
                 #for peak in a.peaks:
                 #    print('hkl=',peak.hkl,'  theta=',peak.theta/np.pi*360,' I=',peak.I,' multi=',peak.multi,' d=',peak.d)
-                if a.evaluate and a.evaluate<400:
+                if a.evaluate and a.evaluate<350:
                     a.xiajibahua()
                     print(filename,':',a.evaluate)

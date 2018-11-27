@@ -15,7 +15,7 @@ from evaluate import getEMD,overlap,comparepeak
 angle_=np.load('N.npz')['angle']
 I_=np.load('N.npz')['I']
 angles_=np.array([8.049320,8.181150,9.045410,11.140140,7.316890,11.374510,11.843260,4.906223,5.770673])
-Is_=np.array([306.584200,290.514510,206.252920,160.128270,131.165200,56.098770,79.021790,42.823206,25.218805])/184.33
+Is_=np.array([306.584200,290.514510,206.252920,160.128270,131.165200,56.098770,79.021790,42.823206,25.218805])/1297.807671
 
 def compress(P,n=20,l=None):
     """
@@ -64,19 +64,21 @@ class XrdStructure():
         self.lattice=self.atoms.get_cell_lengths_and_angles()
         self.reciprocal_lattice=self.atoms.get_reciprocal_cell()*2*np.pi
         self.lamb=lamb
+        self.name=name
         [self.thetamin,self.thetamax]=theta
         self.Khmax=4*np.pi*np.sin(self.thetamax/180*np.pi)/lamb
         self.Khmin=4*np.pi*np.sin(self.thetamin/180*np.pi)/lamb
         self.peaks=[]
-        self.angles=[]
-        self.Is=[]
+        
         self.getallhkl()
-        self.name=name
-        for peak in self.peaks:
-            peak.get_I()
-            self.angles.append(peak.theta/np.pi*360)
-            self.Is.append(peak.I)
+        self.angles=np.array([peak.theta/np.pi*360 for peak in self.peaks])
+        self.Is=np.array([peak.get_I() for peak in self.peaks])
         self.Is=self.Is/np.sum(self.Is)
+        #for peak in self.peaks:
+        #    peak.get_I()
+        #    self.angles.append(peak.theta/np.pi*360)
+        #    self.Is.append(peak.I)
+        #self.Is=self.Is/np.sum(self.Is)
         self.evaluate()
     
     def xiajibahua(self):
@@ -120,17 +122,18 @@ class XrdStructure():
             f+=h/sigma/np.sqrt(2*np.pi)*np.e**(-0.5*(x-mu)**2/sigma**2)
         return f
     
-    def evaluate(self,method='overlap'):
+    def evaluate(self,method='EMD'):
         P=(angles_,Is_)
         Q=(self.angles,self.Is)
         if comparepeak(P,Q):
-            P=(angle_,I_)
-            Q=(angle_,np.array([self.f(x) for x in angle_]))
             if method=='overlap':
+                P=(angle_,I_)
+                Q=(angle_,np.array([self.f(x) for x in angle_]))
                 self.evaluate=2*overlap(compress(P,20),compress(Q,20))+overlap(compress(P,10),compress(Q,10))
                 #self.evaluate=overlap(P,Q)
             if method=='EMD':
-                self.evaluate=getEMD(compress(P),compress(Q))
+                #self.evaluate=getEMD(compress(P),compress(Q))
+                self.evaluate=getEMD(P,Q)
 
         else:
             self.evaluate=0
@@ -152,6 +155,6 @@ if __name__ == '__main__':
                 
                 #for peak in a.peaks:
                 #    print('hkl=',peak.hkl,'  theta=',peak.theta/np.pi*360,' I=',peak.I,' multi=',peak.multi,' d=',peak.d)
-                if a.evaluate:
+                if a.evaluate and a.evaluate<400:
                     a.xiajibahua()
-                #print(filename,':',a.evaluate)
+                    print(filename,':',a.evaluate)

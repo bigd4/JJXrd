@@ -20,6 +20,8 @@ def maximiseTotalFlow(f, wp, wq):
 def flow(f, D):
     f = np.reshape(f, D.shape)
     return (f * D).sum()
+def getDistance(x,y):
+    return [1000,(x-y)**2][abs(x-y)<0.5]
 
 def getDistMatrix(s1, s2):
     numFeats1 = s1.shape[0]
@@ -28,7 +30,7 @@ def getDistMatrix(s1, s2):
 
     for i in range(0, numFeats1):
         for j in range(0, numFeats2):
-            distMatrix[i,j] = abs(s1[i]-s2[j]) #maybe some othere function here
+            distMatrix[i,j] = getDistance(s1[i],s2[j])
 
     #import scipy.spatial
     #distMatrix = scipy.spatial.distance.cdist(s1, s2)
@@ -52,7 +54,6 @@ def getFlowMatrix(P, Q, D):
  
 def getEMD(P,Q):
     D = getDistMatrix(P[0], Q[0])
-    print(P,Q)
     F = getFlowMatrix(P, Q, D)
     return (F * D).sum() / F.sum()
 

@@ -223,7 +223,7 @@ def compress(P,n=20,l=None):
     return (np.arange(n),np.sum(np.concatenate((P[1],np.zeros(n-len(P[1])%n))).reshape(-1,len(P[1])//n+1),1))
     
 class XRD():
-    def __init__(self,hkl,theta,Kh,atoms):
+    def __init__(self,hkl,theta,Kh,atoms,differentiable=False):
         self.hkl=hkl
         self.multi=1
         self.theta=theta
@@ -231,28 +231,79 @@ class XRD():
         self.d=2*np.pi/Kh
         self.atoms=atoms
         self.positions=atoms.get_scaled_positions()
-
+        self.differentiable=differentiable
+        if differentiable:
+            self.get_dKh_dcell()
+            
+    def get_dKh_dcell(self):
+        A=np.mat(self.atoms.get_cell())
+        x=np.mat(self.hkl).T
+        B=A.I
+        F=np.mat(np.zeros([3,3]))
+        for i in [0,1,2]:
+            for j in [0,1,2]:
+                M=np.mat([[B[a,i]*B[j,b] for b in [0,1,2]] for a in [0,1,2]])
+                F[i,j]=x.T*B.T*M*x
+        self.dKh_dcell=np.array(F)/self.Kh/4.0/np.pi
+    
     def get_f(self,symbol):
         f = ff[symbol]
         f0=f[-1]
         for i in np.arange(0, 8, 2):
-            f0 += f[i] *np.exp(-f[i+1]*(self.Kh/(4.*np.pi))**2) * np.exp(-0.01 * self.Kh**2 /(4.0*np.pi))
+            f0 += f[i] *np.exp(-f[i+1]*(self.Kh/(4.*np.pi))**2) #* np.exp(-0.01 * self.Kh**2 /(4.0*np.pi))
         return f0
-
+        
+    def get_f1(self,symbol):
+        f = ff[symbol]
+        f1=np.zeros([3,3])
+        for i in np.arange(0, 8, 2):
+            f1+=f[i]*np.exp(-f[i+1]*(self.Kh/(4.*np.pi))**2)*f[i+1]*self.Kh/(-2*np.pi)*self.dKh_dcell  
+        return f1
+    
     def get_F(self):
         self.F=0
+        f=[]
+        self.Fcos,self.Fsin=np.zeros([3,3]),np.zeros([3,3])
         for i,atom in enumerate(self.atoms):
-            self.F+=self.get_f(atom.symbol)*np.exp(2.0*np.pi*1j*np.dot(self.hkl,self.positions[i]))
+            f.append(self.get_f(atom.symbol))
+            t=2.0*np.pi*np.dot(self.hkl,self.positions[i])
+            self.F+=f[-1]*np.exp(1j*t)
+            if self.differentiable:
+                self.Fcos+=self.get_f1(atom.symbol)*np.cos(t)
+                self.Fsin+=self.get_f1(atom.symbol)*np.sin(t)
+            
+        if self.differentiable:
+            #dh_datompositions
+            self.r,self.i=np.real(self.F),np.imag(self.F)
+            f=np.array(f)
+            ff=4*np.pi*f*(self.i*np.cos(2.0*np.pi*np.dot(self.positions,self.hkl))\
+                          -self.r*np.sin(2.0*np.pi*np.dot(self.positions,self.hkl)))
+            dh_dpositions=np.dot(ff.reshape(-1,1),np.array(self.hkl).reshape(1,-1))
+            self.dh_dpositions=dh_dpositions#+np.random.rand(dh_dpositions.shape[0],dh_dpositions.shape[1])
+            #dh_dcell
+            self.dh_dcell=2*(self.r*self.Fcos+self.i*self.Fsin)
         return abs(self.F)**2
 
     def get_I(self):
-        LP = 1/np.sin(self.theta)**2/np.cos(self.theta)
-        P = 1 + np.cos(2*self.theta)**2
-        self.I = self.get_F()*LP*P*self.multi
+#        LP = 1/np.sin(self.theta)**2/np.cos(self.theta)
+#        P = 1 + np.cos(2*self.theta)**2
+#        self.I = self.get_F()*LP*P*self.multi
+        self.I = self.get_F()*self.multi
         return self.I
-        
+
+    def get_dh_dpositions(self):
+#        LP = 1/np.sin(self.theta)**2/np.cos(self.theta)
+#        P = 1 + np.cos(2*self.theta)**2
+#        self.dh_dpositions = self.dh_dpositions*LP*P*self.multi
+        self.dh_dpositions = self.dh_dpositions*self.multi
+        return self.dh_dpositions
+    
+    def get_dh_dcell(self):
+        self.dh_dcell*=self.multi
+        return self.dh_dcell
+    
 class XrdStructure():
-    def __init__(self,atoms,lamb,thetarange=[0,180]):
+    def __init__(self,atoms,lamb,thetarange=[0,180],differentiable=False):
         self.__atoms=atoms
         self.__lattice=self.__atoms.get_cell_lengths_and_angles()
         self.__reciprocal_lattice=self.__atoms.get_reciprocal_cell()*2*np.pi
@@ -261,10 +312,18 @@ class XrdStructure():
         self.__Khmax=4*np.pi*np.sin(self.__thetamax/180*np.pi)/lamb
         self.__Khmin=4*np.pi*np.sin(self.__thetamin/180*np.pi)/lamb
         self.__peaks=[]
-        
+        self.differentiable=differentiable
         self.__getallhkl()
+        
+        exist_peaks=[peak for peak in self.__peaks if peak.get_I()>1e-3]
+        self.__peaks=exist_peaks
+        
         self.__angles=np.array([peak.theta/np.pi*360 for peak in self.__peaks])
         self.__Is=np.array([peak.get_I() for peak in self.__peaks])
+        if self.differentiable:
+            self.__dh_dpositions=np.array([peak.get_dh_dpositions() for peak in self.__peaks])
+            self.__dh_dcell=np.array([peak.get_dh_dcell() for peak in self.__peaks])
+            self.__dtheta_dcell=np.array([self.__lamb*peak.dKh_dcell/np.sqrt(1-peak.theta**2) for peak in self.__peaks])
         self.__Is=self.__Is/np.sum(self.__Is)
 
     def getplotdata(self,sigma=0.05,step=0.01):
@@ -278,7 +337,12 @@ class XrdStructure():
         return [angle,I]
 
     def getpeakdata(self):
-        return [self.__angles,self.__Is]
+        sort=np.argsort(self.__angles)
+        if self.differentiable:
+            #return np.array([self.__angles[sort],self.__Is[sort]]).transpose(1,0)
+            return np.array([self.__angles[sort],self.__Is[sort]]).transpose(1,0),[self.__dh_dpositions[sort],self.__dh_dcell[sort],self.__dtheta_dcell[sort]]
+        else:
+            return np.array([self.__angles[sort],self.__Is[sort]]).transpose(1,0)
 
     def __getallhkl(self):
         hklmax=(self.__Khmax/np.sqrt(np.sum(self.__reciprocal_lattice**2,axis=1))+1).astype(int)
@@ -293,7 +357,7 @@ class XrdStructure():
                         theta=False
                         break
                 if theta:
-                    self.__peaks.append(XRD(hkl,theta,self.__getKh(hkl),self.__atoms))
+                    self.__peaks.append(XRD(hkl,theta,self.__getKh(hkl),self.__atoms,self.differentiable))
             
     def __gettheta(self,hkl):
         if self.__getKh(hkl)<self.__Khmin or self.__getKh(hkl)>self.__Khmax:
@@ -305,9 +369,10 @@ class XrdStructure():
         Kh=np.dot(hkl,self.__reciprocal_lattice)
         return np.sqrt(np.dot(Kh,Kh))
 
-if __name__=='__main__':
-    a=ase.io.read('1.cif')
-    _=XrdStructure(a,1.5,[2,7.5])
-    import matplotlib.pyplot as plt
-    [x,y]=_.getplotdata()
-    plt.plot(x,y)
+def getplot(a,lamb,thetarange=[0,180],sigma=0.05,step=0.01):
+    _=XrdStructure(a,lamb,thetarange)
+    return _.getplotdata(sigma,step)
+
+def getpeak(a,lamb,thetarange=[0,180],differentiable=False):
+    _=XrdStructure(a,lamb,thetarange,differentiable)
+    return _.getpeakdata()

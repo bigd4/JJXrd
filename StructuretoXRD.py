@@ -314,10 +314,10 @@ class XrdStructure():
         self.__peaks=[]
         self.differentiable=differentiable
         self.__getallhkl()
-        
+        """
         exist_peaks=[peak for peak in self.__peaks if peak.get_I()>1e-3]
         self.__peaks=exist_peaks
-        
+        """
         self.__angles=np.array([peak.theta/np.pi*360 for peak in self.__peaks])
         self.__Is=np.array([peak.get_I() for peak in self.__peaks])
         if self.differentiable:
@@ -326,14 +326,30 @@ class XrdStructure():
             self.__dtheta_dcell=np.array([self.__lamb*peak.dKh_dcell/np.sqrt(1-peak.theta**2) for peak in self.__peaks])
         self.__Is=self.__Is/np.sum(self.__Is)
 
-    def getplotdata(self,sigma=0.05,step=0.01):
-        def f(x,sigma=0.05):
-            f=0
-            for h,mu in zip(self.__Is,self.__angles):
-                f+=h/sigma/np.sqrt(2*np.pi)*np.e**(-0.5*(x-mu)**2/sigma**2)
-            return f
-        angle=np.arange(2*self.__thetamin,2*self.__thetamax,step)
-        I=np.array([f(x) for x in angle])
+    def getplotdata(self,plotargs,differentiable):# sigma=0.05,step=0.01):
+        if plotargs['function']=='Gaussian':
+            def f(x,sigma=0.05):
+                f=0
+                for h,mu in zip(self.__Is,self.__angles):
+                    f+=h/sigma/np.sqrt(2*np.pi)*np.e**(-0.5*(x-mu)**2/sigma**2)
+                return f
+            sigma=plotargs['sigma']
+            step=plotargs['step']
+            angle=np.arange(2*self.__thetamin,2*self.__thetamax,step)
+            I=np.array([f(x) for x in angle])
+        elif plotargs['function']=='Lorentzian':
+            def f(x,w=0.1):
+                #y=I*w**(2*m)/(w**2+(2**(1/m)-1)*(x-5)**2)**m
+                f=0
+                for h,mu in zip(self.__Is,self.__angles):
+                    f+=h*w**2/(w**2+(x-mu)**2)
+                return f
+            w=plotargs['w']
+            step=plotargs['step']
+            angle=np.arange(2*self.__thetamin,2*self.__thetamax,step)
+            I=np.array([f(x,w) for x in angle])
+            if differentiable:
+                dI_dh=w**2/(w**2+())
         return [angle,I]
 
     def getpeakdata(self):
@@ -369,9 +385,9 @@ class XrdStructure():
         Kh=np.dot(hkl,self.__reciprocal_lattice)
         return np.sqrt(np.dot(Kh,Kh))
 
-def getplot(a,lamb,thetarange=[0,180],sigma=0.05,step=0.01):
-    _=XrdStructure(a,lamb,thetarange)
-    return _.getplotdata(sigma,step)
+def getplot(a,lamb,thetarange=[0,180],plotargs,differentiable=False):
+    _=XrdStructure(a,lamb,thetarange,differentiable)
+    return _.getplotdata(plotargs,differentiable)
 
 def getpeak(a,lamb,thetarange=[0,180],differentiable=False):
     _=XrdStructure(a,lamb,thetarange,differentiable)

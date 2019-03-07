@@ -34,23 +34,23 @@ def compare(a,b,lamb=1.5,thetarange=[10,40],sigma=0.05,step=0.01):
 lamb=1.5
 thetarange=[10,20]
 
-a=ase.io.read('1.vasp')
+a=ase.io.read('3.vasp')
 b=ase.io.read('2.vasp')
 xrda=stx.getpeak(a,lamb,thetarange)
 xrdb=stx.getpeak(b,lamb,thetarange)
 
-step=1000
-e=1e-3
-alpha=0.01
-
+step=10000
+e=1e-5
+alpha=0.1
+"""
 for i in range(step):
     err,dcell,dpositions=GD(a,xrdb)
     if err<e:
         break
-    #a.set_cell(a.get_cell()-dcell*alpha)
-    a.set_scaled_positions(a.get_scaled_positions()-dpositions*alpha)
+    a.set_cell(a.get_cell()-dcell*alpha)
+    #a.set_scaled_positions(a.get_scaled_positions()-dpositions*alpha)
     #if i%1000==0:
     print(err)
 ase.io.write('out.cif',a)
-
-#compare(a,b,lamb,thetarange,sigma=1)
+"""
+compare(a,b,lamb,thetarange,sigma=1)

@@ -22,7 +22,7 @@ loop_
   _atom_site_thermal_displace_type
   _atom_site_B_iso_or_equiv
   _atom_site_type_symbol
-  Ti1      1.0000 0.99203  0.01826  0.04175  Biso   1.000  Ti
-  Ti2      1.0000 0.98318  0.53601  0.52900  Biso   1.000  Ti
-  Ti3      1.0000 0.49388  0.94993  0.61596  Biso   1.000  Ti
-  Ti4      1.0000 0.48091  0.49580  0.06329  Biso   1.000  Ti
+  Ti1      1.0000 0.98913  0.02317  0.03769  Biso   1.000  Ti
+  Ti2      1.0000 0.98627  0.53169  0.53231  Biso   1.000  Ti
+  Ti3      1.0000 0.49001  0.96092  0.60172  Biso   1.000  Ti
+  Ti4      1.0000 0.48459  0.48422  0.07828  Biso   1.000  Ti

@@ -304,65 +304,65 @@ class XRD():
     
 class XrdStructure():
     def __init__(self,atoms,lamb,thetarange=[0,180],differentiable=False):
-        self.__atoms=atoms
-        self.__lattice=self.__atoms.get_cell_lengths_and_angles()
-        self.__reciprocal_lattice=self.__atoms.get_reciprocal_cell()*2*np.pi
-        self.__lamb=lamb
-        [self.__thetamin,self.__thetamax]=thetarange
-        self.__Khmax=4*np.pi*np.sin(self.__thetamax/180*np.pi)/lamb
-        self.__Khmin=4*np.pi*np.sin(self.__thetamin/180*np.pi)/lamb
-        self.__peaks=[]
+        self.atoms=atoms
+        self.lattice=self.atoms.get_cell_lengths_and_angles()
+        self.reciprocal_lattice=self.atoms.get_reciprocal_cell()*2*np.pi
+        self.lamb=lamb
+        [self.thetamin,self.thetamax]=thetarange
+        self.Khmax=4*np.pi*np.sin(self.thetamax/180*np.pi)/lamb
+        self.Khmin=4*np.pi*np.sin(self.thetamin/180*np.pi)/lamb
+        self.peaks=[]
         self.differentiable=differentiable
-        self.__getallhkl()
+        self.getallhkl()
         
-        exist_peaks=[peak for peak in self.__peaks if peak.get_I()>1e-3]
-        self.__peaks=exist_peaks
+        exist_peaks=[peak for peak in self.peaks if peak.get_I()>1e-3]
+        self.peaks=exist_peaks
         
-        self.__angles=np.array([peak.theta/np.pi*360 for peak in self.__peaks])
-        self.__Is=np.array([peak.get_I() for peak in self.__peaks])
-        self.__Is=self.__Is/np.max(self.__Is)
+        self.angles=np.array([peak.theta/np.pi*360 for peak in self.peaks])
+        self.Is=np.array([peak.get_I() for peak in self.peaks])
+        self.Is=self.Is/np.max(self.Is)
         if self.differentiable:
-            self.__dh_dpositions=np.array([peak.get_dh_dpositions() for peak in self.__peaks])
-            self.__dh_dcell=np.array([peak.get_dh_dcell() for peak in self.__peaks])
-            self.__dtheta_dcell=np.array([self.__lamb*peak.dKh_dcell/np.sqrt(1-peak.theta**2) for peak in self.__peaks])
+            self.dh_dpositions=np.array([peak.get_dh_dpositions() for peak in self.peaks])
+            self.dh_dcell=np.array([peak.get_dh_dcell() for peak in self.peaks])
+            self.dtheta_dcell=np.array([self.lamb*peak.dKh_dcell/np.cos(peak.theta) for peak in self.peaks])
         
 
     def getplotdata(self,plotargs,differentiable):# sigma=0.05,step=0.01):
         if plotargs['function']=='Gaussian':
             def f(x,sigma=0.05):
                 f=0
-                for h,mu in zip(self.__Is,self.__angles):
+                for h,mu in zip(self.Is,self.angles):
                     f+=h/sigma/np.sqrt(2*np.pi)*np.e**(-0.5*(x-mu)**2/sigma**2)
                 return f
             sigma=plotargs['sigma']
             step=plotargs['step']
-            angle=np.arange(2*self.__thetamin,2*self.__thetamax,step)
+            angle=np.arange(2*self.thetamin,2*self.thetamax,step)
             I=np.array([f(x) for x in angle])
             
         elif plotargs['function']=='Lorentzian':
             def get_I(x,w=0.1):
                 #y=I*w**(2*m)/(w**2+(2**(1/m)-1)*(x-5)**2)**m
                 f=0
-                for h,mu in zip(self.__Is,self.__angles):
+                for h,mu in zip(self.Is,self.angles):
                     f+=h*w**2/(w**2+(x-mu)**2)
                 return f
             
             def get_dI_dpositions(x,w=0.1):
                 return np.sum(np.array([w**2/(w**2+(x-mu)**2)*dh_dpositions \
-                                 for mu,dh_dpositions in zip(self.__angles,self.__dh_dpositions)]),axis=0)
+                                 for mu,dh_dpositions in zip(self.angles,self.dh_dpositions)]),axis=0)
     
             def get_dI_dcell(x,w=0.1):
                 dI_theta_dcell=np.sum(np.array([2*w**2*(x-mu)*h/((w**2+(x-mu)**2))**2*dtheta_dcell \
-                                 for h,mu,dtheta_dcell in zip(self.__Is,self.__angles,self.__dtheta_dcell)]),axis=0)
+                                 for h,mu,dtheta_dcell in zip(self.Is,self.angles,self.dtheta_dcell)]),axis=0)
                 dI_h_dcell=np.sum(np.array([w**2/(w**2+(x-mu)**2)*dh_dcell \
-                                 for mu,dh_dcell in zip(self.__angles,self.__dh_dcell)]),axis=0)
+                                 for mu,dh_dcell in zip(self.angles,self.dh_dcell)]),axis=0)
                 return dI_theta_dcell+dI_h_dcell
             
             w=plotargs['w']
             step=plotargs['step']
-            angle=np.arange(2*self.__thetamin,2*self.__thetamax,step)
+            angle=np.arange(2*self.thetamin,2*self.thetamax,step)
             I=np.array([get_I(x,w) for x in angle])
-            I/=np.max(I)
+            I/=np.max(I)/10
             if differentiable:
                 dI_dpositions=np.array([get_dI_dpositions(x,w) for x in angle])
                 dI_dcell=np.array([get_dI_dcell(x,w) for x in angle])
@@ -370,36 +370,36 @@ class XrdStructure():
         return [angle,I]
 
     def getpeakdata(self):
-        sort=np.argsort(self.__angles)
+        sort=np.argsort(self.angles)
         if self.differentiable:
-            #return np.array([self.__angles[sort],self.__Is[sort]]).transpose(1,0)
-            return np.array([self.__angles[sort],self.__Is[sort]]).transpose(1,0),[self.__dh_dpositions[sort],self.__dh_dcell[sort],self.__dtheta_dcell[sort]]
+            #return np.array([self.angles[sort],self.Is[sort]]).transpose(1,0)
+            return np.array([self.angles[sort],self.Is[sort]]).transpose(1,0),[self.dh_dpositions[sort],self.dh_dcell[sort],self.dtheta_dcell[sort]]
         else:
-            return np.array([self.__angles[sort],self.__Is[sort]]).transpose(1,0)
+            return np.array([self.angles[sort],self.Is[sort]]).transpose(1,0)
 
-    def __getallhkl(self):
-        hklmax=(self.__Khmax/np.sqrt(np.sum(self.__reciprocal_lattice**2,axis=1))+1).astype(int)
+    def getallhkl(self):
+        hklmax=(self.Khmax/np.sqrt(np.sum(self.reciprocal_lattice**2,axis=1))+1).astype(int)
         hrange,krange,lrange=[np.arange(i,-1-i,-1) for i in hklmax]
         #hrange,krange,lrange=np.arange(0-hklmax[0],hklmax[0]+1),np.arange(0-hklmax[1],hklmax[1]+1),np.arange(0-hklmax[2],hklmax[2]+1)
         for hkl in itertools.product(hrange,krange,lrange):
-            theta=self.__gettheta(hkl)
+            theta=self.gettheta(hkl)
             if theta:
-                for peak in self.__peaks: 
+                for peak in self.peaks: 
                     if np.allclose(theta,peak.theta):
                         peak.multi+=1
                         theta=False
                         break
                 if theta:
-                    self.__peaks.append(XRD(hkl,theta,self.__getKh(hkl),self.__atoms,self.differentiable))
+                    self.peaks.append(XRD(hkl,theta,self.getKh(hkl),self.atoms,self.differentiable))
             
-    def __gettheta(self,hkl):
-        if self.__getKh(hkl)<self.__Khmin or self.__getKh(hkl)>self.__Khmax:
+    def gettheta(self,hkl):
+        if self.getKh(hkl)<self.Khmin or self.getKh(hkl)>self.Khmax:
             return False
         else:
-            return np.arcsin(self.__getKh(hkl)*self.__lamb/4/np.pi)
+            return np.arcsin(self.getKh(hkl)*self.lamb/4/np.pi)
 
-    def __getKh(self,hkl):
-        Kh=np.dot(hkl,self.__reciprocal_lattice)
+    def getKh(self,hkl):
+        Kh=np.dot(hkl,self.reciprocal_lattice)
         return np.sqrt(np.dot(Kh,Kh))
 
 def getplot(a,lamb,thetarange=[0,180],plotargs={'function':'Lorentzian','w':0.1,'step':0.05},differentiable=False):

@@ -14,35 +14,33 @@ Created on Mon Mar  4 17:02:35 2019
 
 import numpy as np
 import copy
+import ase.io
+import StructuretoXRD as stx
 
-def f(A,x):
-    B=A.I
-    Kh=B*x
-    K=np.sqrt(Kh.T*Kh)
-    print(Kh)
-    F=np.mat(np.zeros([3,3]))
-    for i in [0,1,2]:
-        for j in [0,1,2]:
-            M=np.mat([[B[a,i]*B[j,b] for b in [0,1,2]] for a in [0,1,2]])
-            F[i,j]=Kh.T*M*x
-    return K,F/K
+import sdtw
+from sdtw.distance import SquaredEuclidean
 
-A1=np.mat(np.random.rand(3,3))
-x=np.mat([[1],[2],[3]])
+def f(a,b):
+    D = SquaredEuclidean(a, b)
+    dtw=sdtw.SoftDTW(D, gamma=0.001)
+    err=dtw.compute()
+    E = dtw.grad()
+    derr_dI = D.jacobian_product(E).reshape(-1)
+    return err#,derr_dI
 
 
-i,j=0,2
-a=0.01
+lamb=1.5
+thetarange=[10,18]
+plotargs={'function':'Lorentzian','w':0.1,'step':0.05}
 
-K1,F1=f(A1,x)
+a=ase.io.read('3.vasp')
+b=ase.io.read('2.vasp')
+fa=np.array(stx.getplot(a,lamb,thetarange,plotargs)).transpose(1,0)
+fb=np.array(stx.getplot(b,lamb,thetarange,plotargs)).transpose(1,0)
+fc=copy.deepcopy(fb)
+for c in fc:
+    c[1]=0
 
-A2=copy.deepcopy(A1)
-A2[i,j]+=a
-K2,_=f(A2,x)
+fa_=np.array(stx.getplot(a,lamb,thetarange,plotargs)[0]).reshape(-1,1)
+fb_=np.array(stx.getplot(b,lamb,thetarange,plotargs)[0]).reshape(-1,1)
 
-K3=K1-F1[i,j]*a
-
-print('K1:\n',K1)
-print('K2:\n',K2)
-print('K3:\n',K3)
-print('K2-K3:\n',K2-K3)
